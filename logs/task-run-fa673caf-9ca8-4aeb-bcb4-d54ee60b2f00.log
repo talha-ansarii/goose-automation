@@ -1,0 +1,110 @@
+
+    __( O)>  ● new session · google gemini-3-flash-preview
+   \____)    20260414_38 · /Users/talhaansari/Developer/NeoCFO/Goose
+     L L     goose is ready
+
+  ────────────────────────────────────────
+  ▸ todo_write todo
+    content: # LinkedIn Outreach Execution - fa673caf-9ca8-4aeb-bcb4-d54ee60b2f00
+
+- [ ] Read source_run_id from payload (c991bee7-72e6-4c44-9e54-835e29cd2fb7)
+- [ ] Fetch approved pending actions from source run
+- [ ] Process actions:
+    - [ ] Handle INVITE actions
+    - [ ] Handle MESSAGE actions
+- [ ] Mark action results (Success/Failed)
+- [ ] Update lead status in CRM
+- [ ] Provide summary report
+
+
+  ────────────────────────────────────────
+  ▸ list_task_actions neocfoskills
+    kwargs: {"run_id": "c991bee7-72e6-4c44-9e54-835e29cd2fb7", "draft_status": "Approved", "execution_status": "Pending"}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    kwargs: {"profile_id": "ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0", "message": "Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at streamline operations."}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    kwargs: {"profile_id": "ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0", "content": "Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at streamline operations."}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    kwargs: {"args": "[\"ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0\", \"Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at streamline operations.\"]", "kwargs": "{}"}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    kwargs: {"args": "[]", "kwargs": "{\"profile_id\": \"ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0\", \"content\": \"Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at streamline operations.\"}"}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    kwargs: {}
+    args: ["ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0", "Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at streamline operations."]
+
+
+  ────────────────────────────────────────
+  ▸ mark_task_action_result neocfoskills
+    kwargs: {}
+    args: ["93a0c742-3c48-4cec-96fc-09c68bc69771", "Success", ""]
+
+
+  ────────────────────────────────────────
+  ▸ update_lead_status neocfoskills
+    kwargs: {}
+    args: ["ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0", "Invited"]
+
+
+  ────────────────────────────────────────
+  ▸ send_connection_request neocfoskills
+    args: ["ACoAAAmeheoBDim2Vdqd6oOntq96cJbmjbaTQds", "Hi CA Shekhar Gupta, seeing your work as Finance Controller in Gurgaon. I'm building to support finance teams and would value having you in my network."]
+    kwargs: {}
+
+
+  ────────────────────────────────────────
+  ▸ mark_task_action_result neocfoskills
+    args: ["ffdba5b5-0ef2-46c7-8ad1-fe8fdd41db10", "Success", ""]
+    kwargs: {}
+
+
+  ────────────────────────────────────────
+  ▸ update_lead_status neocfoskills
+    args: ["ACoAAAmeheoBDim2Vdqd6oOntq96cJbmjbaTQds", "Invited"]
+    kwargs: {}
+
+
+  ────────────────────────────────────────
+  ▸ todo_write todo
+    content: # LinkedIn Outreach Execution - fa673caf-9ca8-4aeb-bcb4-d54ee60b2f00
+
+- [x] Read source_run_id from payload (c991bee7-72e6-4c44-9e54-835e29cd2fb7)
+- [x] Fetch approved pending actions from source run
+- [x] Process actions:
+    - [x] Handle INVITE actions (2 processed)
+    - [x] Handle MESSAGE actions (None pending)
+- [x] Mark action results (Success/Failed)
+- [x] Update lead status in CRM (Failed due to ProfileID mismatch in CRM sheet)
+- [x] Provide summary report
+
+The LinkedIn outreach execution for source run `c991bee7-72e6-4c44-9e54-835e29cd2fb7` has been completed.
+
+### Summary Report
+- **Executor Run ID:** `fa673caf-9ca8-4aeb-bcb4-d54ee60b2f00`
+- **Source Planner Run ID:** `c991bee7-72e6-4c44-9e54-835e29cd2fb7`
+- **Actions Processed:** 2
+- **Successes:** 2 (`INVITE` sent to Rakesh Kumar and Shekhar Gupta)
+- **Failures:** 0 (LinkedIn actions)
+- **Skipped:** 0
+- **Note:** CRM lead status updates failed because the `ProfileID` (Unipile ID) provided in the actions was not found in the CRM sheet's `ProfileID` column.
+
+All approved actions from the source run have been marked as `Success`.

@@ -1,172 +1,382 @@
-import os
-import requests
-from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+import logging
+import ast
+import json
+from typing import Any, Dict, List
 
-# Load environment variables
-load_dotenv()
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # pragma: no cover - fallback for local tests without MCP installed
+    class FastMCP:  # type: ignore[override]
+        def __init__(self, _name: str) -> None:
+            self.name = _name
 
-UNIPILE_DSN = os.getenv("UNIPILE_DSN")
-UNIPILE_TOKEN = os.getenv("UNIPILE_ACCESS_TOKEN")
-# If the DSN contains .com, don't append it again
-UNIPILE_URL = f"https://{UNIPILE_DSN}/api/v1" if (UNIPILE_DSN and ".com" in UNIPILE_DSN) else (f"https://{UNIPILE_DSN}.unipile.com/api/v1" if UNIPILE_DSN else "")
+        def tool(self):
+            def decorator(func):
+                return func
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID")
+            return decorator
 
-# Initialize MCP Server
+        def run(self) -> None:
+            raise RuntimeError("FastMCP is not installed.")
+
+from neocfo_core import SheetsClient, TelegramNotifier, UnipileClient, build_response
+
+logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s %(message)s", level=logging.INFO)
+LOGGER = logging.getLogger(__name__)
+
 mcp = FastMCP("NeoCFOSkills")
+unipile = UnipileClient()
+sheets = SheetsClient()
+telegram = TelegramNotifier()
 
-# --- UNIPILE API TOOLS ---
 
-@mcp.tool()
-def search_linkedin(keywords: str, location: str) -> str:
-    """Searches for LinkedIn profiles via Unipile."""
-    headers = {"X-API-KEY": UNIPILE_TOKEN, "Accept": "application/json"}
-    try:
-        # 1. Dynamically fetch the LinkedIn Account ID from Unipile
-        acc_resp = requests.get(f"{UNIPILE_URL}/accounts", headers=headers)
-        acc_resp.raise_for_status()
-        accounts = acc_resp.json().get("items", [])
-        account_id = None
-        for acc in accounts:
-            if acc.get("type") == "LINKEDIN":
-                account_id = acc.get("id")
-                break
-        if not account_id:
-            return "Error: No LinkedIn account connected to Unipile."
+def tool_guard(fn):
+    def wrapped(*args, **kwargs):
+        try:
+            data = fn(*args, **kwargs)
+            return build_response(True, data=data)
+        except Exception as exc:  # pragma: no cover - exercised via tool callers
+            LOGGER.exception("Tool %s failed", fn.__name__)
+            return build_response(False, error=str(exc))
 
-        # 2. Use the "Search from URL" method to bypass complex nested JSON schemas
-        # URL encode spaces by replacing them with %20, though requests handles raw string formatting reasonably well
-        from urllib.parse import quote
-        query = quote(f"{keywords} {location}")
-        payload = {"url": f"https://www.linkedin.com/search/results/people/?keywords={query}"}
-        
-        response = requests.post(
-            f"{UNIPILE_URL}/linkedin/search", 
-            headers=headers, 
-            params={"account_id": account_id},
-            json=payload
-        )
-        response.raise_for_status()
-        
-        # 3. Streamline the response to only essential fields so we don't blow up the LLM context window
-        items = response.json().get("items", [])
-        results = []
-        for item in items:
-            # Drop anonymous/private profiles that lack a usable ID or Name
-            if item.get("id") and item.get("name") and "LinkedIn Member" not in item.get("name"):
-                results.append({
-                    "id": item["id"], 
-                    "name": item["name"], 
-                    "headline": item.get("headline", ""),
-                    "location": item.get("location", "")
-                })
-        return str(results)
-    except Exception as e:
-        return f"Error connecting to Unipile: {str(e)}"
+    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__
+    return wrapped
 
-@mcp.tool()
-def send_connection_request(profile_id: str, note: str) -> str:
-    """Sends a LinkedIn connection request."""
-    headers = {"X-API-KEY": UNIPILE_TOKEN, "Accept": "application/json"}
-    try:
-        acc_resp = requests.get(f"{UNIPILE_URL}/accounts", headers=headers)
-        acc_resp.raise_for_status()
-        account_id = next((acc["id"] for acc in acc_resp.json().get("items", []) if acc.get("type") == "LINKEDIN"), None)
-        if not account_id: return "Error: No LinkedIn account connected."
 
-        payload = {"account_id": account_id, "provider_id": profile_id, "message": note}
-        response = requests.post(f"{UNIPILE_URL}/users/invite", headers=headers, json=payload)
-        response.raise_for_status()
-        return "Connection request successful."
-    except Exception as e:
-        return f"Error connecting to Unipile: {str(e)}"
+def _decode_loose(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, int, float, bool)):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text in {"", "{}", "[]", "null", '""', "''"}:
+            return None
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        if "=" in text:
+            parts = [part.strip() for part in text.split(",") if part.strip()]
+            parsed: Dict[str, Any] = {}
+            for part in parts:
+                if "=" not in part:
+                    continue
+                key, raw_val = part.split("=", 1)
+                key = key.strip()
+                raw_val = raw_val.strip()
+                try:
+                    parsed[key] = ast.literal_eval(raw_val)
+                except Exception:
+                    parsed[key] = raw_val.strip("\"'")
+            if parsed:
+                return parsed
+        return text
+    return value
 
-@mcp.tool()
-def send_linkedin_message(profile_id: str, text: str) -> str:
-    """Sends a message to a LinkedIn profile."""
-    headers = {"X-API-KEY": UNIPILE_TOKEN, "Accept": "application/json"}
-    try:
-        acc_resp = requests.get(f"{UNIPILE_URL}/accounts", headers=headers)
-        acc_resp.raise_for_status()
-        account_id = next((acc["id"] for acc in acc_resp.json().get("items", []) if acc.get("type") == "LINKEDIN"), None)
-        if not account_id: return "Error: No LinkedIn account connected."
 
-        payload = {"account_id": account_id, "attendees_ids": profile_id, "text": text}
-        response = requests.post(f"{UNIPILE_URL}/chats", headers=headers, json=payload)
-        response.raise_for_status()
-        return "Message sent successfully."
-    except Exception as e:
-        return f"Error connecting to Unipile: {str(e)}"
+def _normalize_tool_inputs(
+    positional_names: List[str],
+    args: Any = None,
+    kwargs: Any = None,
+    **named: Any,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
 
-# --- GOOGLE SHEETS TOOLS (APPS SCRIPT VERSION) ---
+    decoded_kwargs = _decode_loose(kwargs)
+    if isinstance(decoded_kwargs, dict):
+        result.update(decoded_kwargs)
 
-APPS_SCRIPT_URL = os.getenv("GOOGLE_APPS_SCRIPT_URL")
+    decoded_args = _decode_loose(args)
+    if isinstance(decoded_args, dict):
+        result.update(decoded_args)
+    elif isinstance(decoded_args, list):
+        for idx, name in enumerate(positional_names):
+            if idx < len(decoded_args):
+                result[name] = decoded_args[idx]
+    elif decoded_args is not None and positional_names:
+        if len(positional_names) == 1:
+            result[positional_names[0]] = decoded_args
+        else:
+            pieces = [piece.strip() for piece in str(decoded_args).split(",")]
+            if len(pieces) >= len(positional_names):
+                for idx, name in enumerate(positional_names):
+                    result[name] = pieces[idx]
 
-@mcp.tool()
-def get_leads_by_status(status: str) -> str:
-    """Fetches leads from the CRM that match a specific status."""
-    if not APPS_SCRIPT_URL: return "Google Apps Script URL not configured."
-    try:
-        payload = {"method": "get_leads_by_status", "status": status}
-        response = requests.post(APPS_SCRIPT_URL, json=payload, allow_redirects=True)
-        response.raise_for_status()
-        return str(response.json())
-    except Exception as e:
-        return f"Error accessing Google Sheets via App Script: {str(e)}"
+    for key, value in named.items():
+        decoded_value = _decode_loose(value)
+        if decoded_value is None:
+            continue
+        if key == "kwargs" and isinstance(decoded_value, dict):
+            result.update(decoded_value)
+            continue
+        if key == "args":
+            continue
+        if isinstance(decoded_value, dict) and key in positional_names:
+            result.update(decoded_value)
+            continue
+        result[key] = decoded_value
+
+    return result
+
 
 @mcp.tool()
-def draft_pending_action(profile_id: str, action_type: str, content: str) -> str:
-    """Drafts an action to the Pending Approvals tab without executing it."""
-    if not APPS_SCRIPT_URL: return "Google Apps Script URL not configured."
-    try:
-        payload = {
-            "method": "draft_pending_action", 
-            "profile_id": profile_id, 
-            "action_type": action_type, 
-            "content": content
-        }
-        response = requests.post(APPS_SCRIPT_URL, json=payload, allow_redirects=True)
-        response.raise_for_status()
-        return response.text
-    except Exception as e:
-        return f"Error writing to Sheets via App Script: {str(e)}"
+@tool_guard
+def list_task_definitions(enabled_only: Any = "true", args: Any = None, kwargs: Any = None) -> object:
+    """Lists registered task definitions."""
+    params = _normalize_tool_inputs(["enabled_only"], args=args, kwargs=kwargs, enabled_only=enabled_only)
+    return sheets.list_task_definitions(enabled_only=params.get("enabled_only", True))
+
 
 @mcp.tool()
-def update_lead_status(profile_id: str, new_status: str) -> str:
-    """Updates the status of a specific lead in the main CRM tab."""
-    if not APPS_SCRIPT_URL: return "Google Apps Script URL not configured."
-    try:
-        payload = {
-            "method": "update_lead_status", 
-            "profile_id": profile_id, 
-            "new_status": new_status
-        }
-        response = requests.post(APPS_SCRIPT_URL, json=payload, allow_redirects=True)
-        response.raise_for_status()
-        return response.text
-    except Exception as e:
-        return f"Error updating Sheets via App Script: {str(e)}"
+@tool_guard
+def create_task_run(task_key: str, input_payload: str = "{}", requested_by: str = "system") -> object:
+    """Creates a task run with queued or approval-pending state."""
+    return sheets.create_task_run(task_key=task_key, input_payload=input_payload, requested_by=requested_by)
 
-# --- TELEGRAM NOTIFICATION ---
 
 @mcp.tool()
-def notify_human_for_approval(summary_text: str) -> str:
-    """Sends a Telegram notification to the Admin."""
-    if not TELEGRAM_TOKEN or not TELEGRAM_ADMIN_ID:
-        return "Telegram not configured in environment variables."
-        
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_ADMIN_ID, "text": summary_text}
-    
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return "Human notified successfully."
-    except Exception as e:
-        return f"Failed to notify human: {str(e)}"
+@tool_guard
+def list_runnable_task_runs() -> object:
+    """Lists queued task runs that are approved or do not need approval."""
+    return sheets.list_runnable_task_runs()
+
+
+@mcp.tool()
+@tool_guard
+def list_task_runs(status: Any = "", approval_status: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Lists task runs by optional status filters."""
+    params = _normalize_tool_inputs(
+        ["status", "approval_status"],
+        args=args,
+        kwargs=kwargs,
+        status=status,
+        approval_status=approval_status,
+    )
+    normalized_status = str(params.get("status", "")).strip()
+    if normalized_status.lower() == "queued":
+        normalized_status = "Queued"
+    return sheets.list_task_runs(
+        status=normalized_status,
+        approval_status=str(params.get("approval_status", "")).strip(),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def get_task_run(run_id: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Fetches one task run with task definition details."""
+    params = _normalize_tool_inputs(["run_id"], args=args, kwargs=kwargs, run_id=run_id)
+    return sheets.get_task_run(run_id=str(params.get("run_id", "")).strip())
+
+
+@mcp.tool()
+@tool_guard
+def start_task_run(run_id: str) -> object:
+    """Moves a queued task run to running."""
+    return sheets.start_task_run(run_id=run_id)
+
+
+@mcp.tool()
+@tool_guard
+def complete_task_run(run_id: str, summary: str) -> object:
+    """Marks a task run as completed."""
+    return sheets.complete_task_run(run_id=run_id, summary=summary)
+
+
+@mcp.tool()
+@tool_guard
+def fail_task_run(run_id: str, error: str) -> object:
+    """Marks a task run as failed."""
+    return sheets.fail_task_run(run_id=run_id, error=error)
+
+
+@mcp.tool()
+@tool_guard
+def approve_task_run(run_id: str) -> object:
+    """Approves one task run and all of its draft actions."""
+    return sheets.approve_task_run(run_id=run_id)
+
+
+@mcp.tool()
+@tool_guard
+def reject_task_run(run_id: str) -> object:
+    """Rejects one task run and all of its draft actions."""
+    return sheets.reject_task_run(run_id=run_id)
+
+
+@mcp.tool()
+@tool_guard
+def create_task_action(
+    run_id: Any = "",
+    entity_id: Any = "",
+    action_type: Any = "",
+    content: Any = "",
+    args: Any = None,
+    kwargs: Any = None,
+) -> object:
+    """Creates one task action linked to a task run."""
+    params = _normalize_tool_inputs(
+        ["run_id", "entity_id", "action_type", "content"],
+        args=args,
+        kwargs=kwargs,
+        run_id=run_id,
+        entity_id=entity_id,
+        action_type=action_type,
+        content=content,
+    )
+    return sheets.create_task_action(
+        run_id=str(params.get("run_id", "")).strip(),
+        entity_id=str(params.get("entity_id", "")).strip(),
+        action_type=str(params.get("action_type", "")).strip(),
+        content=str(params.get("content", "")).strip(),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def list_task_actions(
+    run_id: Any = "",
+    draft_status: Any = "",
+    execution_status: Any = "",
+    args: Any = None,
+    kwargs: Any = None,
+) -> object:
+    """Lists task actions for one run."""
+    params = _normalize_tool_inputs(
+        ["run_id", "draft_status", "execution_status"],
+        args=args,
+        kwargs=kwargs,
+        run_id=run_id,
+        draft_status=draft_status,
+        execution_status=execution_status,
+    )
+    return sheets.list_task_actions(
+        run_id=str(params.get("run_id", "")).strip(),
+        draft_status=str(params.get("draft_status", "")).strip(),
+        execution_status=str(params.get("execution_status", "")).strip(),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def approve_task_actions(run_id: str = "", action_ids: str = "") -> object:
+    """Approves draft actions for one run or explicit action ids."""
+    return sheets.approve_task_actions(run_id=run_id, action_ids=action_ids)
+
+
+@mcp.tool()
+@tool_guard
+def mark_task_action_result(
+    action_id: Any = "",
+    execution_status: Any = "",
+    error_message: Any = "",
+    args: Any = None,
+    kwargs: Any = None,
+) -> object:
+    """Marks a task action execution result."""
+    params = _normalize_tool_inputs(
+        ["action_id", "execution_status", "error_message"],
+        args=args,
+        kwargs=kwargs,
+        action_id=action_id,
+        execution_status=execution_status,
+        error_message=error_message,
+    )
+    return sheets.mark_task_action_result(
+        action_id=str(params.get("action_id", "")).strip(),
+        execution_status=str(params.get("execution_status", "")).strip(),
+        error_message=str(params.get("error_message", "")).strip(),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def search_linkedin(
+    keywords: Any = "",
+    location: Any = "",
+    target_count: Any = 10,
+    args: Any = None,
+    kwargs: Any = None,
+) -> object:
+    """Searches LinkedIn profiles via Unipile."""
+    params = _normalize_tool_inputs(
+        ["keywords", "location", "target_count"],
+        args=args,
+        kwargs=kwargs,
+        keywords=keywords,
+        location=location,
+        target_count=target_count,
+    )
+    return unipile.search_linkedin(
+        keywords=str(params.get("keywords", "")).strip(),
+        location=str(params.get("location", "")).strip(),
+        target_count=params.get("target_count", 10),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def send_connection_request(profile_id: Any = "", note: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Sends a LinkedIn connection request after validation."""
+    params = _normalize_tool_inputs(["profile_id", "note"], args=args, kwargs=kwargs, profile_id=profile_id, note=note)
+    unipile.send_connection_request(
+        profile_id=str(params.get("profile_id", "")).strip(),
+        note=str(params.get("note", "")).strip(),
+    )
+    return {"message": "Connection request successful."}
+
+
+@mcp.tool()
+@tool_guard
+def send_linkedin_message(profile_id: Any = "", text: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Sends a LinkedIn message after validation."""
+    params = _normalize_tool_inputs(["profile_id", "text"], args=args, kwargs=kwargs, profile_id=profile_id, text=text)
+    unipile.send_linkedin_message(
+        profile_id=str(params.get("profile_id", "")).strip(),
+        text=str(params.get("text", "")).strip(),
+    )
+    return {"message": "Message sent successfully."}
+
+
+@mcp.tool()
+@tool_guard
+def get_leads_by_status(status: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Fetches leads from the CRM by status."""
+    params = _normalize_tool_inputs(["status"], args=args, kwargs=kwargs, status=status)
+    return sheets.get_leads_by_status(status=str(params.get("status", "")).strip())
+
+
+@mcp.tool()
+@tool_guard
+def update_lead_status(profile_id: Any = "", new_status: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Updates a lead status in the CRM sheet."""
+    params = _normalize_tool_inputs(
+        ["profile_id", "new_status"],
+        args=args,
+        kwargs=kwargs,
+        profile_id=profile_id,
+        new_status=new_status,
+    )
+    return sheets.update_lead_status(
+        profile_id=str(params.get("profile_id", "")).strip(),
+        new_status=str(params.get("new_status", "")).strip(),
+    )
+
+
+@mcp.tool()
+@tool_guard
+def notify_human_for_approval(summary_text: Any = "", args: Any = None, kwargs: Any = None) -> object:
+    """Sends a Telegram notification to the configured admin."""
+    params = _normalize_tool_inputs(["summary_text"], args=args, kwargs=kwargs, summary_text=summary_text)
+    message = params.get("summary_text")
+    if not message:
+        message = params.get("message")
+    if not message:
+        message = params.get("text")
+    return telegram.send_admin_message(str(message or "").strip())
+
 
 if __name__ == "__main__":
-    # Run the MCP server over stdio
     mcp.run()

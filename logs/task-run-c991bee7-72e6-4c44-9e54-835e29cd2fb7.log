@@ -1,0 +1,69 @@
+
+    __( O)>  ● new session · google gemini-3-flash-preview
+   \____)    20260414_37 · /Users/talhaansari/Developer/NeoCFO/Goose
+     L L     goose is ready
+
+  ────────────────────────────────────────
+  ▸ todo_write todo
+    content: # LinkedIn Outreach Planning - Run c991bee7-72e6-4c44-9e54-835e29cd2fb7
+
+- [ ] Search LinkedIn for prospects based on keywords "CFO OR \"Head of Finance\" OR \"Finance Controller\" OR \"CA Partner\"" in "India" (target: 10)
+- [ ] Create `INVITE` task actions for valid prospects (limit 190 chars)
+- [ ] Fetch existing leads with status "Connected - Needs Pitch"
+- [ ] Create `MESSAGE` task actions for those leads
+- [ ] Notify human for approval with summary of actions created
+
+
+
+  ────────────────────────────────────────
+  ▸ search_linkedin neocfoskills
+    kwargs: {"keywords": "CFO OR \"Head of Finance\" OR \"Finance Controller\" OR \"CA Partner\"", "location": "India", "target_count": 10}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ create_task_action neocfoskills
+    args: 
+    kwargs: {"run_id": "c991bee7-72e6-4c44-9e54-835e29cd2fb7", "entity_id": "ACoAAAlOqjcBY6y6rp4h5bAK-wVprjY5j7zVAd0", "action_type": "INVITE", "content": "Hi CA Rakesh Kumar, I noticed your role as Head of Finance. I'd love to connect and share how we're helping finance leaders at NeoCFO streamline operations."}
+
+
+  ────────────────────────────────────────
+  ▸ create_task_action neocfoskills
+    args: 
+    kwargs: {"run_id": "c991bee7-72e6-4c44-9e54-835e29cd2fb7", "entity_id": "ACoAAAmeheoBDim2Vdqd6oOntq96cJbmjbaTQds", "action_type": "INVITE", "content": "Hi CA Shekhar Gupta, seeing your work as Finance Controller in Gurgaon. I'm building NeoCFO to support finance teams and would value having you in my network."}
+
+
+  ────────────────────────────────────────
+  ▸ get_leads_by_status neocfoskills
+    kwargs: {}
+    args: Connected - Needs Pitch
+
+
+  ────────────────────────────────────────
+  ▸ notify_human_for_approval neocfoskills
+    kwargs: {"message": "LinkedIn Outreach Planning Complete for Run c991bee7-72e6-4c44-9e54-835e29cd2fb7 (linkedin_outreach_planner).\n\nSummary:\n- Searched for CFO/Finance leads in India.\n- Created 2 INVITE actions for new prospects (CA Rakesh Kumar, CA Shekhar Gupta).\n- No existing leads found needing pitch follow-ups.\n\nPlease review and approve the draft actions."}
+    args: 
+
+
+  ────────────────────────────────────────
+  ▸ todo_write todo
+    content: # LinkedIn Outreach Planning - Run c991bee7-72e6-4c44-9e54-835e29cd2fb7
+
+- [x] Search LinkedIn for prospects based on keywords "CFO OR \"Head of Finance\" OR \"Finance Controller\" OR \"CA Partner\"" in "India" (target: 10)
+- [x] Create `INVITE` task actions for valid prospects (limit 190 chars)
+- [x] Fetch existing leads with status "Connected - Needs Pitch"
+- [x] Create `MESSAGE` task actions for those leads (None found)
+- [x] Notify human for approval with summary of actions created
+
+
+The LinkedIn outreach planning for Run ID `c991bee7-72e6-4c44-9e54-835e29cd2fb7` is complete.
+
+### Summary of Actions:
+- **Search Result:** Found 2 prospects matching the criteria (CFO/Finance roles in India).
+- **Invitations Drafted:**
+    1. **CA Rakesh Kumar** (Head of Finance): Invite note drafted and saved.
+    2. **CA Shekhar Gupta** (Finance Controller): Invite note drafted and saved.
+- **Follow-ups:** Checked for existing leads with status "Connected - Needs Pitch"; none were found during this run.
+- **Notification:** Sent a summary to the admin via Telegram for final approval.
+
+All draft actions are now pending review in the task system.
