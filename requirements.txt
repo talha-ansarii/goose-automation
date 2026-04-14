@@ -1,0 +1,5 @@
+mcp
+requests
+gspread
+python-telegram-bot
+python-dotenv
